@@ -51,9 +51,9 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // ==========================================
+    // =========================================================================
     // SILAKAN EDIT / GANTI DENGAN FIREBASE CONFIG ANDA DI SINI
-    // ==========================================
+    // =========================================================================
   const firebaseConfig = {
   apiKey: "AIzaSyCop2DkP6V6jbCWYQglDZKwvGyZVLEcUy4",
   authDomain: "kanpa-directory-element.firebaseapp.com",
@@ -64,6 +64,39 @@
 };
 
     const appId = "element-directory-production";
+
+    // Helper untuk mengubah link Google Drive & Dropbox biasa menjadi Direct Link Gambar Mentah
+    function getDirectImageUrl(url) {
+      if (!url) return "";
+      
+      // Deteksi Google Drive
+      if (url.includes("drive.google.com") || url.includes("docs.google.com")) {
+        let fileId = "";
+        // Format 1: /file/d/[ID]/view atau /file/d/[ID]/edit
+        const fileDMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileDMatch && fileDMatch[1]) {
+          fileId = fileDMatch[1];
+        } else {
+          // Format 2: ?id=[ID]
+          const idParamMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+          if (idParamMatch && idParamMatch[1]) {
+            fileId = idParamMatch[1];
+          }
+        }
+        
+        if (fileId) {
+          // Gunakan API CDN Googleusercontent (Sangat cepat dan andal untuk tag <img>)
+          return `https://lh3.googleusercontent.com/d/${fileId}`;
+        }
+      }
+
+      // Deteksi Dropbox
+      if (url.includes("dropbox.com")) {
+        return url.replace("?dl=0", "?raw=1").replace("&dl=0", "&raw=1");
+      }
+
+      return url;
+    }
 
     // Division Configurations
     const DIVISIONS = {
@@ -166,7 +199,7 @@
       const dropdownRef = useRef(null);
       const profileRef = useRef(null);
 
-      // Scroll Lock effect when modal popup is open
+      // Scroll Lock effect ketika modal terbuka
       useEffect(() => {
         const isAnyModalOpen = 
           isProfileOpen || 
@@ -512,7 +545,6 @@
             </div>
           )}
 
-          {}
           {firebaseError && (
             <div className="bg-gradient-to-r from-amber-950/90 via-amber-900/80 to-slate-950 border-b border-amber-800/60 p-3 text-xs md:text-sm">
               <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -594,7 +626,6 @@
             </div>
           </header>
 
-          {}
           <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 flex flex-col items-center">
             
             {/* Title */}
@@ -694,7 +725,6 @@
               </span>
             </div>
 
-            {}
             {loading ? (
               <div className="w-full flex flex-col items-center justify-center py-20 text-slate-400">
                 <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mb-4"></div>
@@ -811,7 +841,7 @@
                             title="Perbesar"
                           >
                             <img 
-                              src={item.imageLink} 
+                              src={getDirectImageUrl(item.imageLink)} 
                               alt="preview" 
                               className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200"
                               onError={(e) => {
@@ -841,7 +871,6 @@
             <p>© 2026 Element Directory.</p>
           </footer>
 
-          {}
           {/* PROFILE POPUP DIALOG */}
           {isProfileOpen && (
             <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
@@ -975,7 +1004,6 @@
             </div>
           )}
 
-          {}
           {/* ADD / EDIT MODAL DIALOG */}
           {isAddEditOpen && (
             <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
@@ -1001,17 +1029,17 @@
                   
                   <div>
                     <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
-                      Link Gambar Preview
+                      Link Gambar Preview (Bisa Google Drive / Imgur / Dropbox)
                     </label>
                     <input 
                       type="url"
                       value={formValues.imageLink}
                       onChange={(e) => setFormValues({...formValues, imageLink: e.target.value})}
-                      placeholder="https://drive.google.com/... atau https://images.unsplash.com/..."
+                      placeholder="https://drive.google.com/file/d/... atau https://images.unsplash.com/..."
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
                     />
                     <p className="text-[10px] text-slate-500 mt-0.5">
-                      * Disarankan persegi (1080x1080px) maksimal file 2mb (Gunakan link gambar/Google Drive).
+                      * Disarankan gambar berformat persegi (1080x1080px). Anda bisa menggunakan link 'Bagikan' Google Drive biasa, sistem akan mengonversinya secara otomatis!
                     </p>
                   </div>
 
@@ -1142,7 +1170,6 @@
             </div>
           )}
 
-          {}
           {/* LIGHTBOX FOR PREVIEWING LARGE IMAGE */}
           {activeLargeImage && (
             <div 
@@ -1171,7 +1198,7 @@
                 onClick={(e) => e.stopPropagation()}
               >
                 <img 
-                  src={activeLargeImage} 
+                  src={getDirectImageUrl(activeLargeImage)} 
                   alt="Full preview" 
                   className="max-w-full max-h-[75vh] rounded-2xl object-contain border border-slate-800 shadow-2xl bg-slate-900"
                   onError={(e) => {
@@ -1180,7 +1207,7 @@
                 />
               </div>
               
-              <p className="text-slate-500 text-xs mt-3 tracking-wide select-none">
+              <p className="text-slate-400 text-xs mt-3 tracking-wide select-none">
                 Klik di mana saja untuk kembali ke daftar list
               </p>
             </div>

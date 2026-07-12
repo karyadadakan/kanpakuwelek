@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Element Directory</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React 18 & ReactDOM 18 UMD (Universal Module Definition) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel Standalone to compile JSX on the fly in the browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase v9 Compat SDKs (Perfect for single-file HTML without bundlers) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* Prevent standard scrollbar when lightbox is active */
+    .no-scroll {
+      overflow: hidden !important;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes scaleUp {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    .animate-scaleUp {
+      animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .animate-spin-slow {
+      animation: spin 8s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ==========================================
+    // SILAKAN EDIT / GANTI DENGAN FIREBASE CONFIG ANDA DI SINI
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyAs-demo-key-value-replace-if-needed",
+      authDomain: "element-directory-demo.firebaseapp.com",
+      projectId: "element-directory-demo",
+      storageBucket: "element-directory-demo.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:demo"
+    };
+
+    const appId = "element-directory-production";
+
+    // Division Configurations
+    const DIVISIONS = {
+      'KC': { name: 'KC', color: 'bg-red-500', text: 'text-red-500', border: 'border-red-500', hex: '#ef4444' },
+      'DBE': { name: 'DBE', color: 'bg-orange-500', text: 'text-orange-500', border: 'border-orange-500', hex: '#f97316' },
+      'GF': { name: 'GF', color: 'bg-yellow-400', text: 'text-yellow-500', border: 'border-yellow-400', hex: '#facc15' },
+      'AS': { name: 'AS', color: 'bg-emerald-700', text: 'text-emerald-700', border: 'border-emerald-700', hex: '#047857' },
+      'TGK': { name: 'TGK', color: 'bg-green-400', text: 'text-green-500', border: 'border-green-400', hex: '#4ade80' },
+      'MRD': { name: 'MRD', color: 'bg-blue-800', text: 'text-blue-800', border: 'border-blue-800', hex: '#075985' },
+      'SI': { name: 'SI', color: 'bg-sky-400', text: 'text-sky-400', border: 'border-sky-400', hex: '#38bdf8' },
+    };
+
+    const SAMPLE_DIRECTORIES = [
+      {
+        id: "sample-1",
+        title: "Ruang Kelas Virtual",
+        keyword: "set:nAfmbGBaHliL",
+        website: "https://classroom.google.com",
+        tags: "sekolah, siswa, guru, kelas, meja, kursi",
+        category: "KC",
+        imageLink: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&auto=format&fit=crop&q=80",
+        createdAt: Date.now()
+      },
+      {
+        id: "sample-2",
+        title: "Dashboard Riset Analytics",
+        keyword: "analytics:dbe992x",
+        website: "https://analytics.google.com",
+        tags: "data, riset, chart, statistik, divisi",
+        category: "DBE",
+        imageLink: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
+        createdAt: Date.now() - 1000
+      },
+      {
+        id: "sample-3",
+        title: "Galeri Creative Asset",
+        keyword: "",
+        website: "https://unsplash.com",
+        tags: "foto, desain, seni, kreatif, gambar",
+        category: "GF",
+        imageLink: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=600&auto=format&fit=crop&q=80",
+        createdAt: Date.now() - 2000
+      }
+    ];
+
+    // Safe Firebase initialization
+    let firebaseApp = null;
+    let auth = null;
+    let db = null;
+    let initErrorMsg = null;
+
+    try {
+      if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("replace-if-needed")) {
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+      } else {
+        initErrorMsg = "Firebase berjalan di Mode Demo Offline. Silakan konfigurasi API Key Anda.";
+      }
+    } catch (error) {
+      console.error("Firebase Init Error:", error);
+      initErrorMsg = error.message;
+    }
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [directories, setDirectories] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [isDemoMode, setIsDemoMode] = useState(!db || initErrorMsg !== null);
+      const [firebaseError, setFirebaseError] = useState(initErrorMsg);
+      
+      const [searchQuery, setSearchQuery] = useState("");
+      const [selectedFilter, setSelectedFilter] = useState("Semua Divisi");
+      const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+      
+      const [isProfileOpen, setIsProfileOpen] = useState(false);
+      const [isLoginOpen, setIsLoginOpen] = useState(false);
+      const [showPassword, setShowPassword] = useState(false);
+      
+      const [username, setUsername] = useState("");
+      const [password, setPassword] = useState("");
+      const [loginError, setLoginError] = useState("");
+      const [isZeusMode, setIsZeusMode] = useState(false);
+      
+      const [isAddEditOpen, setIsAddEditOpen] = useState(false);
+      const [editingItem, setEditingItem] = useState(null);
+      const [formValues, setFormValues] = useState({
+        title: "",
+        keyword: "",
+        website: "",
+        tags: "",
+        category: "KC",
+        imageLink: ""
+      });
+      
+      const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
+      const [activeLargeImage, setActiveLargeImage] = useState(null);
+      const [toastMessage, setToastMessage] = useState(null);
+
+      const dropdownRef = useRef(null);
+      const profileRef = useRef(null);
+
+      // Scroll Lock effect when modal popup is open
+      useEffect(() => {
+        const isAnyModalOpen = 
+          isProfileOpen || 
+          isAddEditOpen || 
+          !!deleteConfirmItem || 
+          !!activeLargeImage;
+
+        if (isAnyModalOpen) {
+          document.body.classList.add('no-scroll');
+        } else {
+          document.body.classList.remove('no-scroll');
+        }
+        return () => {
+          document.body.classList.remove('no-scroll');
+        };
+      }, [isProfileOpen, isAddEditOpen, deleteConfirmItem, activeLargeImage]);
+
+      useEffect(() => {
+        if (isDemoMode || !auth) {
+          setDirectories(SAMPLE_DIRECTORIES);
+          setLoading(false);
+          return;
+        }
+
+        const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
+          setUser(currentUser);
+          if (!currentUser) {
+            auth.signInAnonymously().catch(err => {
+              console.warn("Auth anonymous fail:", err);
+            });
+          }
+        });
+
+        const handleClickOutside = (e) => {
+          if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+            setIsFilterDropdownOpen(false);
+          }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+          unsubscribeAuth();
+          document.removeEventListener('mousedown', handleClickOutside);
+        };
+      }, [isDemoMode]);
+
+      useEffect(() => {
+        if (isDemoMode || !db) return;
+
+        setLoading(true);
+        const publicCollectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('directories');
+        
+        const unsubscribeSnapshot = publicCollectionRef.onSnapshot(
+          (snapshot) => {
+            const items = [];
+            snapshot.forEach((doc) => {
+              items.push({ id: doc.id, ...doc.data() });
+            });
+            
+            items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            
+            if (items.length === 0) {
+              seedSampleData();
+            } else {
+              setDirectories(items);
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Firestore sync error:", error);
+            setLoading(false);
+            setFirebaseError(`Gagal sinkronisasi data dari Firestore: ${error.message}`);
+            setIsDemoMode(true);
+            setDirectories(SAMPLE_DIRECTORIES);
+          }
+        );
+
+        const loadAdminConfig = async () => {
+          const adminDocRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('admin_config').doc('credentials');
+          try {
+            const snap = await adminDocRef.get();
+            if (!snap.exists) {
+              await adminDocRef.set({
+                username: "zeus",
+                password: "zeuspassword123"
+              });
+            }
+          } catch (e) {
+            console.warn("Could not setup admin configs.");
+          }
+        };
+        loadAdminConfig();
+
+        return () => unsubscribeSnapshot();
+      }, [user, isDemoMode]);
+
+      const seedSampleData = async () => {
+        if (isDemoMode || !db) return;
+        try {
+          const publicCollectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('directories');
+          for (const item of SAMPLE_DIRECTORIES) {
+            await publicCollectionRef.doc(item.id).set(item);
+          }
+        } catch (e) {
+          console.error("Error seeding sample data", e);
+        }
+      };
+
+      const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => {
+          setToastMessage(null);
+        }, 3000);
+      };
+
+      const fallbackCopyText = (text) => {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-99999px";
+        textArea.style.top = "-99999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          textArea.remove();
+          return true;
+        } catch (err) {
+          textArea.remove();
+          return false;
+        }
+      };
+
+      const handleCopyText = (e, text, label) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text)
+            .then(() => {
+              showToast(`${label} berhasil disalin!`);
+            })
+            .catch(() => {
+              if (fallbackCopyText(text)) {
+                showToast(`${label} berhasil disalin!`);
+              } else {
+                showToast(`Gagal menyalin ${label}.`);
+              }
+            });
+        } else {
+          if (fallbackCopyText(text)) {
+            showToast(`${label} berhasil disalin!`);
+          } else {
+            showToast(`Gagal menyalin ${label}.`);
+          }
+        }
+      };
+
+      const handleLoginSubmit = async (e) => {
+        e.preventDefault();
+        setLoginError("");
+
+        if (isDemoMode || !db) {
+          if (username === "zeus" && password === "zeuspassword123") {
+            setIsZeusMode(true);
+            setIsLoginOpen(false);
+            setIsProfileOpen(false);
+            setUsername("");
+            setPassword("");
+            showToast("Mode Demo Zeus Aktif! (Lokal)");
+          } else {
+            setLoginError("Username atau sandi salah! Gunakan: zeus / zeuspassword123 (Demo)");
+          }
+          return;
+        }
+
+        try {
+          const adminDocRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('admin_config').doc('credentials');
+          const snap = await adminDocRef.get();
+          
+          let validUsername = "zeus";
+          let validPassword = "zeuspassword123";
+
+          if (snap.exists) {
+            const data = snap.data();
+            validUsername = data.username || validUsername;
+            validPassword = data.password || validPassword;
+          }
+
+          if (username === validUsername && password === validPassword) {
+            setIsZeusMode(true);
+            setIsLoginOpen(false);
+            setIsProfileOpen(false);
+            setUsername("");
+            setPassword("");
+            showToast("Salam Dewa Zeus! Mode Admin Aktif.");
+          } else {
+            setLoginError("Username atau password yang dimasukkan salah!");
+          }
+        } catch (err) {
+          console.error("Login verification error:", err);
+          if (username === "zeus" && password === "zeuspassword123") {
+            setIsZeusMode(true);
+            setIsLoginOpen(false);
+            setIsProfileOpen(false);
+            showToast("Mode Darurat Zeus Aktif.");
+          } else {
+            setLoginError("Username atau password yang dimasukkan salah!");
+          }
+        }
+      };
+
+      const handleLogout = () => {
+        setIsZeusMode(false);
+        setIsProfileOpen(false);
+        showToast("Kembali menjadi Tamu.");
+      };
+
+      const handleOpenAdd = () => {
+        setEditingItem(null);
+        setFormValues({
+          title: "",
+          keyword: "",
+          website: "",
+          tags: "",
+          category: "KC",
+          imageLink: ""
+        });
+        setIsAddEditOpen(true);
+      };
+
+      const handleOpenEdit = (item, e) => {
+        if (e) e.stopPropagation();
+        setEditingItem(item);
+        setFormValues({
+          title: item.title || "",
+          keyword: item.keyword || "",
+          website: item.website || "",
+          tags: item.tags || "",
+          category: item.category || "KC",
+          imageLink: item.imageLink || ""
+        });
+        setIsAddEditOpen(true);
+      };
+
+      const handleSaveItem = async (e) => {
+        e.preventDefault();
+        if (!formValues.title.trim() || !formValues.website.trim()) {
+          showToast("Judul dan Website wajib diisi!");
+          return;
+        }
+
+        const payload = {
+          title: formValues.title,
+          keyword: formValues.keyword,
+          website: formValues.website,
+          tags: formValues.tags,
+          category: formValues.category,
+          imageLink: formValues.imageLink || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80",
+          updatedAt: Date.now()
+        };
+
+        if (isDemoMode || !db) {
+          if (editingItem) {
+            setDirectories(directories.map(item => item.id === editingItem.id ? { ...item, ...payload } : item));
+            showToast("Berhasil diperbarui secara lokal!");
+          } else {
+            const newItem = { ...payload, id: `local-${Date.now()}`, createdAt: Date.now() };
+            setDirectories([newItem, ...directories]);
+            showToast("Berhasil ditambahkan secara lokal!");
+          }
+          setIsAddEditOpen(false);
+          return;
+        }
+
+        try {
+          const publicCollectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('directories');
+          
+          if (editingItem) {
+            await publicCollectionRef.doc(editingItem.id).update(payload);
+            showToast("List berhasil diperbarui!");
+          } else {
+            payload.createdAt = Date.now();
+            await publicCollectionRef.add(payload);
+            showToast("List baru berhasil ditambahkan!");
+          }
+          setIsAddEditOpen(false);
+        } catch (err) {
+          console.error("Save item error:", err);
+          showToast("Gagal menyimpan data!");
+        }
+      };
+
+      const handleDeleteItem = async () => {
+        if (!deleteConfirmItem) return;
+
+        if (isDemoMode || !db) {
+          setDirectories(directories.filter(item => item.id !== deleteConfirmItem.id));
+          showToast("List lokal berhasil dihapus!");
+          setDeleteConfirmItem(null);
+          return;
+        }
+
+        try {
+          const publicCollectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('directories');
+          await publicCollectionRef.doc(deleteConfirmItem.id).delete();
+          showToast("List berhasil dihapus!");
+          setDeleteConfirmItem(null);
+        } catch (err) {
+          console.error("Delete item error:", err);
+          showToast("Gagal menghapus data!");
+        }
+      };
+
+      const filteredDirectories = directories.filter((item) => {
+        if (selectedFilter !== "Semua Divisi" && item.category !== selectedFilter) {
+          return false;
+        }
+        
+        if (searchQuery.trim() !== "") {
+          const query = searchQuery.toLowerCase();
+          const titleMatch = (item.title || "").toLowerCase().includes(query);
+          
+          const tagsString = (item.tags || "").toLowerCase();
+          const tagsArray = tagsString.split(',').map(t => t.trim());
+          const tagMatch = tagsArray.some(tag => tag.includes(query)) || tagsString.includes(query);
+
+          return titleMatch || tagMatch;
+        }
+
+        return true;
+      });
+
+      return (
+        <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col transition-colors duration-300">
+          
+          {/* Toast Notification */}
+          {toastMessage && (
+            <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce border border-indigo-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span className="font-medium text-sm">{toastMessage}</span>
+            </div>
+          )}
+
+          {}
+          {firebaseError && (
+            <div className="bg-gradient-to-r from-amber-950/90 via-amber-900/80 to-slate-950 border-b border-amber-800/60 p-3 text-xs md:text-sm">
+              <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-amber-500/20 p-2 rounded-lg text-amber-400 border border-amber-500/30">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-amber-200">Menjalankan Mode Demo Offline</h5>
+                    <p className="text-amber-400/90 mt-0.5">
+                      Sistem berjalan lokal karena: <span className="font-mono bg-amber-950/50 px-1 py-0.5 rounded">{firebaseError}</span>. Silakan hubungkan Firebase asli Anda lewat kode `index.html`.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setFirebaseError(null)}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs self-start md:self-auto"
+                >
+                  Sembunyikan
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* HEADER BAR */}
+          <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 md:px-8">
+            <div className="max-w-7xl mx-auto flex justify-between items-center">
+              
+              {/* Left Side: Add Button for Zeus */}
+              <div className="w-24 md:w-32">
+                {isZeusMode ? (
+                  <button 
+                    onClick={handleOpenAdd}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-bold px-3 py-2 rounded-full transition-all shadow-lg hover:shadow-yellow-500/20 active:scale-95 text-xs"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Tambah List</span>
+                  </button>
+                ) : (
+                  <div className="w-10"></div>
+                )}
+              </div>
+
+              {/* Center Brand */}
+              <div className="flex items-center gap-2 select-none">
+                <svg className="text-indigo-400 animate-spin-slow hidden md:block w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l92-7-9-7-9 7v7m0-13a5 5 0 1110 0 5 5 0 01-10 0z" />
+                </svg>
+                <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 tracking-wider">
+                  PORTAL ELEMENT
+                </span>
+              </div>
+
+              {/* Right Side: Profile Circle */}
+              <div className="relative w-24 md:w-32 flex justify-end" ref={profileRef}>
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border-2 active:scale-95 ${
+                    isZeusMode 
+                      ? 'bg-amber-500 border-yellow-300 text-slate-950 shadow-lg shadow-amber-500/20' 
+                      : 'bg-slate-800 hover:bg-slate-700 border-indigo-500 text-indigo-400'
+                  }`}
+                  title={isZeusMode ? "Dewa Zeus Mode" : "Tamu Mode"}
+                >
+                  {isZeusMode ? (
+                    <span className="font-bold text-xs">⚡</span>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          </header>
+
+          {}
+          <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 flex flex-col items-center">
+            
+            {/* Title */}
+            <div className="text-center mb-6">
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                Element Directory
+              </h1>
+              {isDemoMode && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 mt-3 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-semibold">
+                  Mode Demo Aktif
+                </span>
+              )}
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div className="w-full bg-slate-800/40 p-3 rounded-2xl border border-slate-800/80 backdrop-blur-sm shadow-xl flex flex-col md:flex-row gap-2 mb-6 relative z-20">
+              
+              {/* Search Box */}
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input 
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari berdasarkan judul atau tag..."
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-100 placeholder-slate-400 text-sm transition-all"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown Filter */}
+              <div className="relative z-30" ref={dropdownRef}>
+                <button 
+                  onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                  className="w-full md:w-52 flex items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-sm font-medium text-slate-200 hover:bg-slate-800 transition-all focus:outline-none"
+                >
+                  <div className="flex items-center gap-2">
+                    {selectedFilter !== "Semua Divisi" && (
+                      <span className={`w-3 h-3 rounded-full ${DIVISIONS[selectedFilter]?.color}`}></span>
+                    )}
+                    <span>{selectedFilter}</span>
+                  </div>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isFilterDropdownOpen && (
+                  <div className="absolute right-0 left-0 md:left-auto md:w-52 mt-2 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl z-[40] overflow-hidden divide-y divide-slate-800/60 py-1 animate-fadeIn">
+                    <button
+                      onClick={() => {
+                        setSelectedFilter("Semua Divisi");
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs hover:bg-slate-850 flex items-center gap-2 transition-colors ${selectedFilter === 'Semua Divisi' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-300'}`}
+                    >
+                      <span className="w-3 h-3 rounded-full border border-slate-600"></span>
+                      Semua Divisi
+                    </button>
+                    {Object.keys(DIVISIONS).map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setSelectedFilter(key);
+                          setIsFilterDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-xs hover:bg-slate-850 flex items-center gap-2 transition-colors ${selectedFilter === key ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-300'}`}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${DIVISIONS[key].color}`}></span>
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Filter Status */}
+            <div className="w-full mb-4 flex justify-start items-center gap-2 px-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Status Filter:</span>
+              <span className="px-2.5 py-0.5 text-xs rounded-full bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 font-medium">
+                Filter : {selectedFilter === "Semua Divisi" ? "Semua Divisi" : `Divisi ${selectedFilter}`}
+              </span>
+            </div>
+
+            {}
+            {loading ? (
+              <div className="w-full flex flex-col items-center justify-center py-20 text-slate-400">
+                <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mb-4"></div>
+                <p className="text-xs">Sinkronisasi Direktori Element...</p>
+              </div>
+            ) : filteredDirectories.length === 0 ? (
+              <div className="w-full py-16 px-4 bg-slate-850/20 border border-dashed border-slate-800 rounded-2xl flex flex-col items-center text-center animate-fadeIn">
+                <div className="text-4xl mb-3">🔍</div>
+                <h3 className="text-base font-bold text-slate-200">Yah, nggak ketemu...</h3>
+                <p className="text-slate-500 text-xs mt-1.5 italic max-w-xs">
+                  "Kadang yang dicari nggak ketemu, tapi rasa sakitnya selalu ada :)"
+                </p>
+              </div>
+            ) : (
+              <div className="w-full flex flex-col gap-3 relative z-10">
+                {filteredDirectories.map((item) => {
+                  const divMeta = DIVISIONS[item.category] || { color: 'bg-slate-500', text: 'text-slate-500', border: 'border-slate-500' };
+                  
+                  return (
+                    <div 
+                      key={item.id}
+                      className="relative bg-slate-800/20 hover:bg-slate-800/50 rounded-xl border border-slate-800/80 hover:border-slate-700/60 transition-all duration-300 shadow-md flex flex-col md:flex-row items-stretch"
+                    >
+                      
+                      {/* Left Column Content - Direct Card Link Redirection */}
+                      <div 
+                        onClick={() => {
+                          if (item.website) {
+                            window.open(item.website, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                        className="flex-1 p-4 flex flex-col justify-between gap-4 cursor-pointer select-none group"
+                        title="Buka Website"
+                      >
+                        <div className="flex items-center gap-2">
+                          {/* Colored Division Ring & Indicator */}
+                          <span className={`w-3 h-3 rounded-full ${divMeta.color} ring-4 ring-slate-900/40 flex-shrink-0`}></span>
+                          <h4 className="font-bold text-base md:text-lg text-slate-100 group-hover:text-indigo-400 transition-colors line-clamp-1">
+                            {item.title}
+                          </h4>
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${divMeta.color}/10 ${divMeta.text} border ${divMeta.border}/30`}>
+                            {item.category}
+                          </span>
+                        </div>
+
+                        {/* Keyword copy prompt container */}
+                        {item.keyword && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1.5 self-start"
+                          >
+                            <span className="text-[11px] font-mono bg-slate-950/70 px-2.5 py-1 rounded-md border border-slate-800 flex items-center gap-1.5">
+                              <span className="text-[9px] uppercase font-semibold text-indigo-400 tracking-wider">Keyword:</span>
+                              <span className="text-slate-200 select-all">{item.keyword}</span>
+                            </span>
+                            
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyText(e, item.keyword, "Keyword")}
+                              className="p-1 bg-slate-900 border border-slate-700/50 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition-all active:scale-95"
+                              title="Salin Keyword"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Column Content - Tools, Copy URL & Preview Image */}
+                      <div className="md:w-60 p-3 border-t md:border-t-0 md:border-l border-slate-800/80 flex md:flex-row justify-between items-center gap-3 bg-slate-950/10">
+                        
+                        {/* Control buttons */}
+                        <div className="flex flex-col gap-1.5 w-full flex-1">
+                          <button
+                            onClick={(e) => handleCopyText(e, item.website, "Link Website")}
+                            className="flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg transition-all border border-slate-700/50 active:scale-95 text-xs font-semibold"
+                            title="Salin Link Website"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            <span>Salin Link</span>
+                          </button>
+
+                          {/* Zeus controls */}
+                          {isZeusMode && (
+                            <div className="flex gap-1.5 w-full">
+                              <button
+                                onClick={(e) => handleOpenEdit(item, e)}
+                                className="flex-1 flex items-center justify-center gap-1 py-1 px-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg transition-all text-[10px] font-bold"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmItem(item);
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1 py-1 px-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg transition-all text-[10px] font-bold"
+                              >
+                                🗑️ Hapus
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Image Preview Box Trigger */}
+                        {item.imageLink && (
+                          <div 
+                            onClick={() => setActiveLargeImage(item.imageLink)}
+                            className="relative w-14 h-14 rounded-lg overflow-hidden group/img cursor-zoom-in border border-slate-800 bg-slate-900 flex-shrink-0"
+                            title="Perbesar"
+                          >
+                            <img 
+                              src={item.imageLink} 
+                              alt="preview" 
+                              className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200"
+                              onError={(e) => {
+                                e.target.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80";
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10.5 7.5v6m3-3h-6" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          </main>
+
+          {/* FOOTER */}
+          <footer className="py-6 text-center text-slate-500 text-xs border-t border-slate-850 bg-slate-950/25 mt-16 select-none">
+            <p>© 2026 Element Directory.</p>
+          </footer>
+
+          {}
+          {/* PROFILE POPUP DIALOG */}
+          {isProfileOpen && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-scaleUp">
+                
+                {/* Header */}
+                <div className="p-5 pb-0 flex justify-between items-center">
+                  <span className="text-xs font-bold uppercase tracking-widest text-indigo-400">Status Profil</span>
+                  <button 
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setIsLoginOpen(false);
+                      setLoginError("");
+                    }}
+                    className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Profile content */}
+                <div className="p-5 text-center">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-slate-850 flex items-center justify-center border-2 border-indigo-500/20 mb-3 text-2xl">
+                    {isZeusMode ? "⚡" : "👤"}
+                  </div>
+
+                  <h2 className="text-xl font-extrabold text-white">
+                    {isZeusMode ? "Kamu Dewa Zeus" : "Kamu Tamu"}
+                  </h2>
+
+                  <p className="text-slate-400 text-xs mt-1.5">
+                    {isZeusMode 
+                      ? "Kontrol direktori penuh berada di tangan Anda." 
+                      : "Apakah kamu ingin menjadi dewa zeus?"
+                    }
+                  </p>
+
+                  {/* Authentication section */}
+                  {!isZeusMode ? (
+                    <div className="mt-5">
+                      {!isLoginOpen ? (
+                        <button 
+                          onClick={() => setIsLoginOpen(true)}
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-md"
+                        >
+                          Login Sebagai Zeus
+                        </button>
+                      ) : (
+                        <form onSubmit={handleLoginSubmit} className="mt-4 border-t border-slate-800/80 pt-4 text-left space-y-3.5 animate-fadeIn">
+                          
+                          {/* Username */}
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                              Username
+                            </label>
+                            <input 
+                              type="text"
+                              required
+                              value={username}
+                              onChange={(e) => setUsername(e.target.value)}
+                              placeholder="Username dewa..."
+                              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-xs"
+                            />
+                          </div>
+
+                          {/* Password */}
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                              Password
+                            </label>
+                            <div className="relative">
+                              <input 
+                                type={showPassword ? "text" : "password"}
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Sandi suci..."
+                                className="w-full pl-3.5 pr-9 py-2 bg-slate-950 border border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+                              >
+                                {showPassword ? (
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {loginError && (
+                            <div className="flex items-center gap-2 text-red-500 bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">
+                              <span className="text-[11px] font-semibold">{loginError}</span>
+                            </div>
+                          )}
+
+                          <button 
+                            type="submit"
+                            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2.5 rounded-lg text-xs"
+                          >
+                            Submit Sandi Dewa
+                          </button>
+
+                        </form>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-5">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 font-bold py-2.5 rounded-xl text-xs"
+                      >
+                        Kembali Menjadi Tamu
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {}
+          {/* ADD / EDIT MODAL DIALOG */}
+          {isAddEditOpen && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-scaleUp max-h-[85vh] flex flex-col">
+                
+                <div className="p-4 border-b border-slate-800/80 flex justify-between items-center">
+                  <h3 className="text-base font-extrabold text-white flex items-center gap-1.5">
+                    <span>⚡</span>
+                    {editingItem ? "Edit List Directory" : "Tambah List Baru"}
+                  </h3>
+                  <button 
+                    type="button"
+                    onClick={() => setIsAddEditOpen(false)}
+                    className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveItem} className="p-4 overflow-y-auto space-y-3.5 flex-1 text-xs">
+                  
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Link Gambar Preview
+                    </label>
+                    <input 
+                      type="url"
+                      value={formValues.imageLink}
+                      onChange={(e) => setFormValues({...formValues, imageLink: e.target.value})}
+                      placeholder="https://drive.google.com/... atau https://images.unsplash.com/..."
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      * Disarankan persegi (1080x1080px) maksimal file 2mb (Gunakan link gambar/Google Drive).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Judul List <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text"
+                      required
+                      value={formValues.title}
+                      onChange={(e) => setFormValues({...formValues, title: e.target.value})}
+                      placeholder="Contoh: Dashboard Ruang Kelas"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Keyword (Opsional)
+                    </label>
+                    <input 
+                      type="text"
+                      value={formValues.keyword}
+                      onChange={(e) => setFormValues({...formValues, keyword: e.target.value})}
+                      placeholder="Contoh: set:nAfmbGBaHliL (Kosongkan jika tidak ada)"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Website URL <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="url"
+                      required
+                      value={formValues.website}
+                      onChange={(e) => setFormValues({...formValues, website: e.target.value})}
+                      placeholder="https://example.com"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Tag List (Pemisah Koma)
+                    </label>
+                    <input 
+                      type="text"
+                      value={formValues.tags}
+                      onChange={(e) => setFormValues({...formValues, tags: e.target.value})}
+                      placeholder="sekolah, siswa, guru, kelas"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Tag tidak tampil di list, namun aktif dicari lewat search bar.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                      Kategori Divisi
+                    </label>
+                    <select 
+                      value={formValues.category}
+                      onChange={(e) => setFormValues({...formValues, category: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none"
+                    >
+                      {Object.keys(DIVISIONS).map((key) => (
+                        <option key={key} value={key}>
+                          Divisi {key}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-3 border-t border-slate-800/80">
+                    <button 
+                      type="button"
+                      onClick={() => setIsAddEditOpen(false)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium"
+                    >
+                      Batal
+                    </button>
+                    <button 
+                      type="submit"
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-md"
+                    >
+                      Simpan List
+                    </button>
+                  </div>
+
+                </form>
+
+              </div>
+            </div>
+          )}
+
+          {/* DELETE CONFIRMATION DIALOG */}
+          {deleteConfirmItem && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs overflow-hidden shadow-2xl p-5 text-center animate-scaleUp">
+                <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                  ⚠️
+                </div>
+                
+                <h4 className="text-sm font-extrabold text-white mb-1.5">Hapus List Ini?</h4>
+                <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                  Apakah anda ingin menghapus list <strong className="text-slate-200">"{deleteConfirmItem.title}"</strong>?
+                </p>
+
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => setDeleteConfirmItem(null)}
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                  >
+                    Tidak
+                  </button>
+                  <button
+                    onClick={handleDeleteItem}
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow-md"
+                  >
+                    Iya
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {}
+          {/* LIGHTBOX FOR PREVIEWING LARGE IMAGE */}
+          {activeLargeImage && (
+            <div 
+              className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 cursor-default z-[99999]"
+              onClick={() => setActiveLargeImage(null)}
+            >
+              {/* Back / Close button always visible at top right */}
+              <div className="absolute top-6 right-6 z-[100000]">
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveLargeImage(null);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-full transition-all shadow-2xl border border-red-500/30 active:scale-95"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-xs tracking-wider uppercase">Tutup / Kembali</span>
+                </button>
+              </div>
+              
+              <div 
+                className="relative max-w-4xl max-h-[80vh] w-full flex items-center justify-center animate-scaleUp p-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img 
+                  src={activeLargeImage} 
+                  alt="Full preview" 
+                  className="max-w-full max-h-[75vh] rounded-2xl object-contain border border-slate-800 shadow-2xl bg-slate-900"
+                  onError={(e) => {
+                    e.target.src = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80";
+                  }}
+                />
+              </div>
+              
+              <p className="text-slate-500 text-xs mt-3 tracking-wide select-none">
+                Klik di mana saja untuk kembali ke daftar list
+              </p>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    // Rendering our compiled React component to the standard UMD Root
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
